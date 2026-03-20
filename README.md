@@ -28,6 +28,143 @@ Model performance on the held-out testset with 95% confidence interval using pro
 |NPV                |0.588 [0.585–0.590]|0.765 [0.761–0.767]|0.838 [0.835–0.84]         |
 
 
+## Setup
+
+### Prerequisites
+
+* Python ≥ 3.7
+* [conda](https://docs.conda.io/en/latest/) (recommended)
+
+### Installation
+
+```bash
+conda env create -f environment.yml
+conda activate pe_fusion
+```
+
+### Data directory
+
+The code expects a data root at `/data/fusion` (configurable in
+`constants/constants.py`).  The directory must contain:
+
+```
+/data/fusion/
+├── emr_data/          # Raw EMR CSV files (All.csv, Demographics.csv, …)
+├── vision_feature/    # Pre-extracted imaging features (vision.pickle)
+├── mappings/          # Train/val/test split and label pickle files
+├── parsed_data/       # Created by the pre-processing step (see below)
+├── logs/              # Training logs (created automatically)
+├── ckpt/              # Model checkpoints (created automatically)
+└── results/           # Prediction results (created automatically)
+```
+
+
+## Repository Structure
+
+```
+pe_fusion/
+├── constants/              # Global paths and hyper-parameter grids
+│   ├── constants.py        # Directory paths and column-name constants
+│   └── gridsearch.py       # Elastic-net grid-search parameter space
+├── dataset/                # PyTorch Dataset and DataLoader wrappers
+│   ├── emr_dataset.py      # Single-modality EMR dataset
+│   └── fusion_dataset.py   # Multi-modality fusion dataset
+├── lightning/              # PyTorch Lightning training/evaluation wrapper
+│   └── lightning_model.py  # LightningModule (train, val, test loops)
+├── models/                 # Model definitions
+│   ├── fcnn.py             # Fully connected neural network (FCNN)
+│   ├── joint_fusion.py     # Joint (early) fusion model
+│   ├── late_fusion.py      # Late average fusion script
+│   └── elastic.py          # Elastic-net logistic regression baseline
+├── preprocess/             # Data pre-processing scripts
+│   ├── create_dataset.py   # Parse raw CSVs → train/val/test pickle files
+│   └── remove_subseg.py    # Filter out subsegmental PE cases
+├── train.py                # Main training entry-point
+├── test.py                 # Evaluation on a saved checkpoint
+├── train.sh                # Example training shell script
+├── test.sh                 # Example testing shell script
+└── sweep.yaml              # Weights & Biases hyper-parameter sweep config
+```
+
+
+## Usage
+
+### 1 — Pre-process EMR data
+
+```bash
+python preprocess/create_dataset.py
+```
+
+This reads the raw CSV files from `emr_data/`, applies z-score normalisation
+and splits the data into `train`, `val`, and `test` pickle files under
+`parsed_data/`.
+
+Optionally, remove subsegmental PE cases:
+
+```bash
+python preprocess/remove_subseg.py
+```
+
+### 2 — Train a model
+
+Single EMR modality (e.g. Demographics):
+
+```bash
+python train.py \
+    --data_type Demographics \
+    --num_neurons 512 --num_hidden 2 \
+    --activation ReLU --init_method kaiming \
+    --dropout_prob 0.2 --lr 1e-4 \
+    --optimizer adam --batch_size 64 \
+    --max_epochs 50 --gpus 1
+```
+
+Joint fusion (all EMR modalities + imaging features):
+
+```bash
+python train.py \
+    --data_type JointAll \
+    --num_neurons 512 --num_hidden 2 \
+    --activation ReLU --init_method kaiming \
+    --dropout_prob 0.2 --lr 1e-4 \
+    --optimizer adam --batch_size 64 \
+    --max_epochs 50 --gpus 1
+```
+
+The `data_type` argument accepts:
+
+| Value | Description |
+|-------|-------------|
+| `Demographics`, `ICD`, `LABS`, `Vitals`, `INP_MED`, `OUT_MED`, `All` | Single EMR modality |
+| `Vision` | Imaging features only |
+| `JointSeparate` | Aggregated EMR (`All`) + imaging |
+| `JointAll` | All individual EMR modalities + imaging |
+
+### 3 — Evaluate a checkpoint
+
+```bash
+python test.py --checkpoint_path /data/fusion/ckpt/<experiment>/<ckpt>.ckpt
+```
+
+Results are saved to `RESULTS_DIR/<experiment_name>/results.csv`.
+
+### 4 — Late fusion (probability averaging)
+
+After generating individual model result files, combine them:
+
+```bash
+python models/late_fusion.py \
+    --result_paths results/emr_model/results.csv,results/imaging_model/results.csv \
+    --late_fusion_name late_all
+```
+
+### 5 — Elastic-net baseline
+
+```bash
+python models/elastic.py
+```
+
+
 ## Citation
 Huang, SC., Pareek, A., Zamanian, R. et al. Multimodal fusion with deep neural networks for leveraging CT imaging and electronic health record: a case-study in pulmonary embolism detection. Sci Rep 10, 22147 (2020). https://doi-org.stanford.idm.oclc.org/10.1038/s41598-020-78888-w
 

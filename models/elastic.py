@@ -1,3 +1,19 @@
+"""Elastic-net logistic regression baseline.
+
+Trains an elastic-net penalised logistic regression model (via scikit-learn)
+on the combined ``'All'`` EMR feature set (train + validation), using grid
+search with cross-validation to select the best regularisation
+hyper-parameters.  The best model is then evaluated on the test split and
+results are saved to ``RESULTS_DIR / 'elasticnet' / results.csv``.
+
+This script serves as a strong non-neural baseline and its predictions can
+also be used as an input to the late-fusion combination step.
+
+Typical usage::
+
+    python models/elastic.py
+"""
+
 import pickle
 import os 
 import sys 
@@ -12,6 +28,17 @@ from sklearn.model_selection import GridSearchCV
 
 
 def get_data():
+    """Load the ``'All'`` EMR features and labels for each split.
+
+    Merges train and validation data into a single development set used for
+    grid-search cross-validation.  Test features and their accession numbers
+    are kept separate for final evaluation.
+
+    Returns:
+        tuple: ``(x_dev, y_dev, x_test, y_test, acc_test)`` where each
+        element is a list.  ``x_*`` contain feature vectors, ``y_*`` contain
+        binary labels, and ``acc_test`` contains accession number strings.
+    """
 
     # get paths
     all_feature_path = PARSED_EMR_DICT['All']
@@ -44,6 +71,20 @@ def get_data():
 
 
 def grid_search(x_dev, y_dev):
+    """Select the best elastic-net regularisation hyper-parameters.
+
+    Runs :class:`~sklearn.model_selection.GridSearchCV` over the parameter
+    grid defined in ``constants.gridsearch.PARAMETERS['elasticnet']`` and
+    returns the fitted best estimator.
+
+    Args:
+        x_dev (list): Feature vectors for the development set (train + val).
+        y_dev (list): Binary labels for the development set.
+
+    Returns:
+        sklearn.linear_model.LogisticRegression: Best fitted estimator
+        (maximising AUROC).
+    """
     clf = LogisticRegression(
         penalty='elasticnet', solver='saga', random_state=0
     )
@@ -59,6 +100,7 @@ def grid_search(x_dev, y_dev):
 
 
 def main():
+    """Run elastic-net grid search and save test-set predictions."""
     # get features and labels
     x_dev, y_dev, x_test, y_test, acc_test = get_data()
 

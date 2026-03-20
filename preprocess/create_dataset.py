@@ -1,3 +1,16 @@
+"""Dataset creation script for EMR modalities.
+
+Reads each raw EMR CSV file listed in ``constants.RAW_EMR_DATA``, applies
+standard pre-processing (removal of zero-variance features, z-score
+normalisation), and splits the data into train / val / test pickle files
+using the pre-computed index-to-split mapping.  The resulting files are
+saved under ``constants.PARSED_DATA_DIR``.
+
+Typical usage::
+
+    python preprocess/create_dataset.py
+"""
+
 import pickle
 import pandas as pd
 import os

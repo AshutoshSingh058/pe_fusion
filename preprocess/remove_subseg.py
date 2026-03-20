@@ -1,3 +1,17 @@
+"""Script to remove subsegmental PE cases from parsed datasets.
+
+Subsegmental pulmonary embolisms are a clinically ambiguous subgroup.
+This script filters them out from the pre-processed train / val / test
+pickle files for every EMR modality so that experiments can be run on
+the remaining non-subsegmental cases.  The filtered files are written
+to a ``<study>_no_subseg`` sub-directory alongside the original split
+files.
+
+Typical usage::
+
+    python preprocess/remove_subseg.py
+"""
+
 import pickle
 import os
 import sys

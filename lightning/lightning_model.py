@@ -1,3 +1,24 @@
+"""PyTorch Lightning wrapper for PE Fusion models.
+
+This module contains :class:`LightningModel`, a
+:class:`~pytorch_lightning.LightningModule` that unifies training, validation
+and testing logic for both single-modality (EMR-only) and multi-modality
+fusion experiments.
+
+The model architecture is selected automatically at initialisation time:
+
+* **Single modality** (``data_type`` is a ``str``): an :class:`~models.FCNN`
+  is used.
+* **Multiple modalities** (``data_type`` is a ``list``): a
+  :class:`~models.JointModel` is used.
+
+Special ``data_type`` shortcuts:
+
+* ``'JointAll'``      – all EMR modalities concatenated with vision features.
+* ``'JointSeparate'`` – the aggregated ``'All'`` EMR feature combined with
+  vision features.
+"""
+
 import sys
 import os
 import torch
@@ -14,8 +35,32 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from constants       import *
 
 class LightningModel(pl.LightningModule):
+    """PyTorch Lightning module for single- and multi-modality PE classification.
+
+    Wraps :class:`~models.FCNN` or :class:`~models.JointModel` with the full
+    training loop, metric logging, optimiser configuration and data loading.
+    Binary cross-entropy with logits (:class:`~torch.nn.BCEWithLogitsLoss`) is
+    used as the training objective.  AUROC and AUPRC are logged at the end of
+    each epoch for train, validation and test splits.
+
+    Hyperparameters are passed via *hparams* (an ``argparse.Namespace`` or
+    equivalent) and stored for checkpoint compatibility.
+    """
 
     def __init__(self, hparams):
+        """Initialise the LightningModel.
+
+        Resolves the ``data_type`` shortcut names, instantiates the
+        appropriate network architecture, and sets up metric accumulators.
+
+        Args:
+            hparams: An ``argparse.Namespace`` (or any object with equivalent
+                attributes) containing the model and training hyper-parameters.
+                Required attributes: ``data_type``, ``num_neurons``,
+                ``num_hidden``, ``init_method``, ``activation``,
+                ``dropout_prob``, ``batch_size``, ``lr``, ``num_workers``,
+                ``label_path``, ``experiment_name``.
+        """
         super().__init__()
         self.hparams = hparams
         self.loss = torch.nn.BCEWithLogitsLoss()
@@ -155,6 +200,20 @@ class LightningModel(pl.LightningModule):
 
 
     def evaluate(self, probs, true):
+        """Compute AUROC and AUPRC from accumulated batch predictions.
+
+        If the ground-truth array contains only one class (can happen in
+        small validation batches) both metrics are returned as 0 to avoid
+        exceptions from scikit-learn.
+
+        Args:
+            probs (list[np.ndarray]): Per-batch probability arrays collected
+                during an epoch.
+            true (list[np.ndarray]): Per-batch ground-truth label arrays.
+
+        Returns:
+            tuple[float, float]: ``(auroc, auprc)`` for the epoch.
+        """
 
         # concat results from all iterations
         probs = np.concatenate(probs)

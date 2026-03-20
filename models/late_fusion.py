@@ -1,3 +1,17 @@
+"""Late (average) fusion script.
+
+Combines prediction probability files from independently trained models by
+averaging their probability scores.  This is the simplest late-fusion
+strategy and corresponds to the *late elastic average* configuration
+described in the paper.
+
+Typical usage::
+
+    python models/late_fusion.py \\
+        --result_paths results/emr_model/results.csv,results/imaging_model/results.csv \\
+        --late_fusion_name late_all
+"""
+
 import argparse
 import pandas as pd
 import os 
@@ -8,6 +22,18 @@ from constants import *
 
 
 def main(args):
+    """Run late average fusion over the provided result files.
+
+    Reads each CSV result file (which must contain at minimum *accession*,
+    *labels*, and *probs* columns), joins them on the accession number, and
+    writes a new CSV with the averaged probability to
+    ``RESULTS_DIR / late_fusion_name / results.csv``.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments.  Required
+            attributes: ``result_paths`` (list of str), ``late_fusion_name``
+            (str).
+    """
 
     # read in all results
     dfs = []
